@@ -157,3 +157,38 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found")
     return db_product
+
+
+# --- Inventory Endpoints ---
+
+@app.get(
+    "/inventory/",
+    response_model=List[schemas.Inventory],
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    inventory_list = crud.list_inventory(db, skip=skip, limit=limit)
+    return inventory_list
+
+
+@app.post(
+    "/inventory/{product_id}/adjust",
+    response_model=schemas.Inventory,
+    dependencies=[Depends(admin_role_checker)],
+)
+def adjust_product_inventory(
+    product_id: int,
+    adjustment: schemas.InventoryUpdate,
+    db: Session = Depends(get_db),
+):
+    db_product = crud.get_product(db, product_id=product_id)
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    updated_inventory = crud.adjust_inventory(
+        db=db, product_id=product_id, change=adjustment.change
+    )
+    if not updated_inventory:
+        # This case should ideally not be hit if a product exists
+        raise HTTPException(status_code=404, detail="Inventory for product not found")
+    return updated_inventory

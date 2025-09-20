@@ -189,6 +189,8 @@ def sample_product(test_client, admin_user_token_headers):
 def test_admin_can_create_product(sample_product):
     assert sample_product["sku"] == "TEST-001"
     assert sample_product["name"] == "Test Product"
+    assert sample_product["inventory"] is not None
+    assert sample_product["inventory"]["quantity"] == 0
 
 
 def test_regular_user_cannot_create_product(test_client, regular_user_token_headers):
@@ -278,5 +280,53 @@ def test_admin_can_delete_product(test_client, admin_user_token_headers, sample_
 def test_regular_user_cannot_delete_product(test_client, regular_user_token_headers, sample_product):
     response = test_client.delete(
         f"/products/{sample_product['id']}", headers=regular_user_token_headers
+    )
+    assert response.status_code == 403
+
+
+# --- Inventory Module Tests ---
+
+def test_authenticated_user_can_read_inventory(test_client, regular_user_token_headers, sample_product):
+    response = test_client.get("/inventory/", headers=regular_user_token_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    # Find our specific product's inventory
+    inventory_item = next(
+        (item for item in data if item["product_id"] == sample_product["id"]), None
+    )
+    assert inventory_item is not None
+    assert inventory_item["quantity"] == 0
+
+
+def test_admin_can_adjust_inventory(test_client, admin_user_token_headers, sample_product):
+    # Add 50 units
+    adjust_data = {"change": 50}
+    response = test_client.post(
+        f"/inventory/{sample_product['id']}/adjust",
+        json=adjust_data,
+        headers=admin_user_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["quantity"] == 50
+
+    # Subtract 20 units
+    adjust_data = {"change": -20}
+    response = test_client.post(
+        f"/inventory/{sample_product['id']}/adjust",
+        json=adjust_data,
+        headers=admin_user_token_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["quantity"] == 30
+
+
+def test_regular_user_cannot_adjust_inventory(test_client, regular_user_token_headers, sample_product):
+    adjust_data = {"change": 10}
+    response = test_client.post(
+        f"/inventory/{sample_product['id']}/adjust",
+        json=adjust_data,
+        headers=regular_user_token_headers,
     )
     assert response.status_code == 403

@@ -39,3 +39,17 @@ class Product(Base):
     name = Column(String, index=True)
     description = Column(String)
     price = Column(Float, nullable=False)
+
+    inventory = relationship(
+        "Inventory", back_populates="product", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class Inventory(Base):
+    __tablename__ = "inventory"
+
+    id = Column(Integer, primary_key=True, index=True)
+    quantity = Column(Integer, default=0, nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), unique=True, nullable=False)
+
+    product = relationship("Product", back_populates="inventory")

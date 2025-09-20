@@ -35,8 +35,25 @@ class ProductUpdate(BaseModel):
     price: Optional[float] = None
 
 
+class InventoryBase(BaseModel):
+    quantity: int
+
+
+class InventoryUpdate(BaseModel):
+    change: int
+
+
+class Inventory(InventoryBase):
+    id: int
+    product_id: int
+
+    class Config:
+        orm_mode = True
+
+
 class Product(ProductBase):
     id: int
+    inventory: Optional[Inventory] = None
 
     class Config:
         orm_mode = True

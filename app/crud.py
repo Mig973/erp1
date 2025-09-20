@@ -63,6 +63,13 @@ def create_product(db: Session, product: schemas.ProductCreate):
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
+
+    # Create inventory record for the new product
+    db_inventory = models.Inventory(product_id=db_product.id, quantity=0)
+    db.add(db_inventory)
+    db.commit()
+    db.refresh(db_inventory)
+
     return db_product
 
 
@@ -82,3 +89,22 @@ def delete_product(db: Session, product_id: int):
         db.delete(db_product)
         db.commit()
     return db_product
+
+
+# --- Inventory CRUD ---
+
+def list_inventory(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Inventory).offset(skip).limit(limit).all()
+
+
+def adjust_inventory(db: Session, product_id: int, change: int):
+    inventory_item = (
+        db.query(models.Inventory)
+        .filter(models.Inventory.product_id == product_id)
+        .first()
+    )
+    if inventory_item:
+        inventory_item.quantity += change
+        db.commit()
+        db.refresh(inventory_item)
+    return inventory_item
