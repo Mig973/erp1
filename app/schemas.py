@@ -18,6 +18,44 @@ class Role(RoleBase):
         orm_mode = True
 
 
+# --- Purchase Order Schemas ---
+
+class PurchaseOrderItemBase(BaseModel):
+    product_id: int
+    quantity: int
+    price_per_unit: float
+
+
+class PurchaseOrderItemCreate(PurchaseOrderItemBase):
+    pass
+
+
+class PurchaseOrderItem(PurchaseOrderItemBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+
+class PurchaseOrderBase(BaseModel):
+    supplier_id: int
+
+
+class PurchaseOrderCreate(PurchaseOrderBase):
+    items: List[PurchaseOrderItemCreate]
+
+
+class PurchaseOrder(PurchaseOrderBase):
+    id: int
+    status: str
+    total_amount: float
+    created_at: datetime
+    items: List[PurchaseOrderItem] = []
+
+    class Config:
+        orm_mode = True
+
+
 class SupplierBase(BaseModel):
     name: str
     email: str

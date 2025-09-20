@@ -345,3 +345,63 @@ def test_purchasing_user_can_delete_supplier(test_client, purchasing_user_token_
         f"/suppliers/{sample_supplier['id']}", headers=purchasing_user_token_headers
     )
     assert verify_response.status_code == 404
+
+
+# --- Purchase Order Module Tests ---
+
+@pytest.fixture
+def product_for_purchase(test_client, admin_user_token_headers):
+    product_data = {"sku": "PUR-001", "name": "Purchasable Product", "price": 50.0}
+    response = test_client.post("/products/", json=product_data, headers=admin_user_token_headers)
+    assert response.status_code == 200
+    return response.json()
+
+def test_purchasing_user_can_create_purchase_order(test_client, purchasing_user_token_headers, sample_supplier, product_for_purchase):
+    order_data = {
+        "supplier_id": sample_supplier["id"],
+        "items": [{"product_id": product_for_purchase["id"], "quantity": 20, "price_per_unit": 45.0}],
+    }
+    response = test_client.post("/purchase-orders/", json=order_data, headers=purchasing_user_token_headers)
+
+    assert response.status_code == 200
+    order = response.json()
+    assert order["supplier_id"] == sample_supplier["id"]
+    assert order["total_amount"] == 900.0  # 20 * 45.0
+    assert order["status"] == "pending"
+    assert len(order["items"]) == 1
+    assert order["items"][0]["quantity"] == 20
+
+    # Verify inventory has NOT changed yet
+    response = test_client.get(f"/inventory/", headers=purchasing_user_token_headers)
+    inventory_item = next(item for item in response.json() if item["product_id"] == product_for_purchase["id"])
+    assert inventory_item["quantity"] == 0
+
+
+def test_receiving_purchase_order_increases_inventory(test_client, purchasing_user_token_headers, sample_supplier, product_for_purchase):
+    # 1. Create a purchase order
+    order_data = {
+        "supplier_id": sample_supplier["id"],
+        "items": [{"product_id": product_for_purchase["id"], "quantity": 75, "price_per_unit": 45.0}],
+    }
+    response = test_client.post("/purchase-orders/", json=order_data, headers=purchasing_user_token_headers)
+    assert response.status_code == 200
+    order_id = response.json()["id"]
+
+    # 2. Receive the order
+    response = test_client.post(f"/purchase-orders/{order_id}/receive", headers=purchasing_user_token_headers)
+    assert response.status_code == 200
+    assert response.json()["status"] == "received"
+
+    # 3. Verify inventory has increased
+    response = test_client.get(f"/inventory/", headers=purchasing_user_token_headers)
+    inventory_item = next(item for item in response.json() if item["product_id"] == product_for_purchase["id"])
+    assert inventory_item["quantity"] == 75
+
+
+def test_regular_user_cannot_create_purchase_order(test_client, regular_user_token_headers, sample_supplier, product_for_purchase):
+    order_data = {
+        "supplier_id": sample_supplier["id"],
+        "items": [{"product_id": product_for_purchase["id"], "quantity": 10, "price_per_unit": 50.0}],
+    }
+    response = test_client.post("/purchase-orders/", json=order_data, headers=regular_user_token_headers)
+    assert response.status_code == 403

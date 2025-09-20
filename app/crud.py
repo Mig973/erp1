@@ -255,3 +255,72 @@ def delete_supplier(db: Session, supplier_id: int):
         db.delete(db_supplier)
         db.commit()
     return db_supplier
+
+
+# --- Purchase Order CRUD ---
+
+def get_purchase_order(db: Session, order_id: int):
+    return (
+        db.query(models.PurchaseOrder)
+        .filter(models.PurchaseOrder.id == order_id)
+        .first()
+    )
+
+
+def list_purchase_orders(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.PurchaseOrder).offset(skip).limit(limit).all()
+
+
+def create_purchase_order(db: Session, order: schemas.PurchaseOrderCreate):
+    # 1. Verify supplier exists
+    db_supplier = get_supplier(db, supplier_id=order.supplier_id)
+    if not db_supplier:
+        raise ValueError(f"Supplier with id {order.supplier_id} not found")
+
+    total_amount = 0
+    order_items_data = []
+
+    # 2. Verify products and calculate total amount
+    for item in order.items:
+        db_product = get_product(db, product_id=item.product_id)
+        if not db_product:
+            raise ValueError(f"Product with id {item.product_id} not found")
+
+        item_total = item.price_per_unit * item.quantity
+        total_amount += item_total
+        order_items_data.append(
+            {
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+                "price_per_unit": item.price_per_unit,
+            }
+        )
+
+    # 3. Create the PurchaseOrder and PurchaseOrderItems
+    db_order = models.PurchaseOrder(
+        supplier_id=order.supplier_id, total_amount=total_amount
+    )
+    db.add(db_order)
+    db.flush()
+
+    for item_data in order_items_data:
+        db_item = models.PurchaseOrderItem(order_id=db_order.id, **item_data)
+        db.add(db_item)
+
+    db.commit()
+    db.refresh(db_order)
+    return db_order
+
+
+def receive_purchase_order(db: Session, order_id: int):
+    db_order = get_purchase_order(db, order_id=order_id)
+    if not db_order or db_order.status == "received":
+        return None
+
+    for item in db_order.items:
+        adjust_inventory(db, product_id=item.product_id, change=item.quantity)
+
+    db_order.status = "received"
+    db.commit()
+    db.refresh(db_order)
+    return db_order

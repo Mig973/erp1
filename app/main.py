@@ -379,3 +379,58 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
     if db_supplier is None:
         raise HTTPException(status_code=404, detail="Supplier not found")
     return db_supplier
+
+
+# --- Purchase Order Endpoints ---
+
+@app.post(
+    "/purchase-orders/",
+    response_model=schemas.PurchaseOrder,
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def create_purchase_order(
+    order: schemas.PurchaseOrderCreate, db: Session = Depends(get_db)
+):
+    try:
+        db_order = crud.create_purchase_order(db=db, order=order)
+        return db_order
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/purchase-orders/",
+    response_model=List[schemas.PurchaseOrder],
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def read_purchase_orders(
+    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+):
+    orders = crud.list_purchase_orders(db, skip=skip, limit=limit)
+    return orders
+
+
+@app.get(
+    "/purchase-orders/{order_id}",
+    response_model=schemas.PurchaseOrder,
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def read_purchase_order(order_id: int, db: Session = Depends(get_db)):
+    db_order = crud.get_purchase_order(db, order_id=order_id)
+    if db_order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return db_order
+
+
+@app.post(
+    "/purchase-orders/{order_id}/receive",
+    response_model=schemas.PurchaseOrder,
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def receive_purchase_order(order_id: int, db: Session = Depends(get_db)):
+    db_order = crud.receive_purchase_order(db, order_id=order_id)
+    if db_order is None:
+        raise HTTPException(
+            status_code=404, detail="Order not found or already received"
+        )
+    return db_order
