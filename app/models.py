@@ -1,5 +1,6 @@
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, Table
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from .database import Base
 
 
@@ -43,6 +44,7 @@ class Product(Base):
     inventory = relationship(
         "Inventory", back_populates="product", uselist=False, cascade="all, delete-orphan"
     )
+    order_items = relationship("SalesOrderItem", back_populates="product")
 
 
 class Inventory(Base):
@@ -63,3 +65,31 @@ class Customer(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     phone = Column(String, nullable=True)
     address = Column(String, nullable=True)
+
+    orders = relationship("SalesOrder", back_populates="customer")
+
+
+class SalesOrder(Base):
+    __tablename__ = "sales_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    status = Column(String, default="pending", nullable=False)
+    total_amount = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    customer = relationship("Customer", back_populates="orders")
+    items = relationship("SalesOrderItem", back_populates="order", cascade="all, delete-orphan")
+
+
+class SalesOrderItem(Base):
+    __tablename__ = "sales_order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    price_per_unit = Column(Float, nullable=False)
+
+    order = relationship("SalesOrder", back_populates="items")
+    product = relationship("Product", back_populates="order_items")

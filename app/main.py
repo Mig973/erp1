@@ -265,3 +265,44 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     if db_customer is None:
         raise HTTPException(status_code=404, detail="Customer not found")
     return db_customer
+
+
+# --- Sales Order Endpoints ---
+
+@app.post(
+    "/orders/",
+    response_model=schemas.SalesOrder,
+    dependencies=[Depends(sales_role_checker)],
+)
+def create_sales_order(
+    order: schemas.SalesOrderCreate, db: Session = Depends(get_db)
+):
+    try:
+        db_order = crud.create_sales_order(db=db, order=order)
+        if not db_order:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        return db_order
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get(
+    "/orders/",
+    response_model=List[schemas.SalesOrder],
+    dependencies=[Depends(sales_role_checker)],
+)
+def read_sales_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    orders = crud.list_sales_orders(db, skip=skip, limit=limit)
+    return orders
+
+
+@app.get(
+    "/orders/{order_id}",
+    response_model=schemas.SalesOrder,
+    dependencies=[Depends(sales_role_checker)],
+)
+def read_sales_order(order_id: int, db: Session = Depends(get_db)):
+    db_order = crud.get_sales_order(db, order_id=order_id)
+    if db_order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return db_order

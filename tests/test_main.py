@@ -209,3 +209,59 @@ def test_sales_user_can_delete_customer(test_client, sales_user_token_headers, s
         f"/customers/{sample_customer['id']}", headers=sales_user_token_headers
     )
     assert verify_response.status_code == 404
+
+
+# --- Sales Order Module Tests ---
+
+@pytest.fixture
+def product_with_stock(test_client, admin_user_token_headers):
+    # Create product
+    product_data = {"sku": "STK-001", "name": "Stocked Product", "price": 25.0}
+    response = test_client.post("/products/", json=product_data, headers=admin_user_token_headers)
+    product = response.json()
+
+    # Add stock
+    response = test_client.post(f"/inventory/{product['id']}/adjust", json={"change": 100}, headers=admin_user_token_headers)
+    assert response.status_code == 200
+    assert response.json()["quantity"] == 100
+
+    return product
+
+
+def test_sales_user_can_create_order(test_client, sales_user_token_headers, admin_user_token_headers, sample_customer, product_with_stock):
+    order_data = {
+        "customer_id": sample_customer["id"],
+        "items": [{"product_id": product_with_stock["id"], "quantity": 10}],
+    }
+    response = test_client.post("/orders/", json=order_data, headers=sales_user_token_headers)
+
+    assert response.status_code == 200
+    order = response.json()
+    assert order["customer_id"] == sample_customer["id"]
+    assert order["total_amount"] == 250.0  # 10 * 25.0
+    assert len(order["items"]) == 1
+    assert order["items"][0]["quantity"] == 10
+
+    # Verify inventory was reduced
+    response = test_client.get(f"/inventory/", headers=admin_user_token_headers)
+    inventory_item = next(item for item in response.json() if item["product_id"] == product_with_stock["id"])
+    assert inventory_item["quantity"] == 90  # 100 - 10
+
+
+def test_create_order_insufficient_stock(test_client, sales_user_token_headers, sample_customer, product_with_stock):
+    order_data = {
+        "customer_id": sample_customer["id"],
+        "items": [{"product_id": product_with_stock["id"], "quantity": 200}], # We only have 100
+    }
+    response = test_client.post("/orders/", json=order_data, headers=sales_user_token_headers)
+    assert response.status_code == 400
+    assert "Not enough stock" in response.json()["detail"]
+
+
+def test_regular_user_cannot_create_order(test_client, regular_user_token_headers, sample_customer, product_with_stock):
+    order_data = {
+        "customer_id": sample_customer["id"],
+        "items": [{"product_id": product_with_stock["id"], "quantity": 5}],
+    }
+    response = test_client.post("/orders/", json=order_data, headers=regular_user_token_headers)
+    assert response.status_code == 403

@@ -152,3 +152,62 @@ def delete_customer(db: Session, customer_id: int):
         db.delete(db_customer)
         db.commit()
     return db_customer
+
+
+# --- Sales Order CRUD ---
+
+def get_sales_order(db: Session, order_id: int):
+    return (
+        db.query(models.SalesOrder).filter(models.SalesOrder.id == order_id).first()
+    )
+
+
+def list_sales_orders(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.SalesOrder).offset(skip).limit(limit).all()
+
+
+def create_sales_order(db: Session, order: schemas.SalesOrderCreate):
+    # 1. Verify customer exists
+    db_customer = get_customer(db, customer_id=order.customer_id)
+    if not db_customer:
+        return None  # Or raise exception
+
+    total_amount = 0
+    order_items_data = []
+
+    # 2. Verify products and calculate total amount
+    for item in order.items:
+        db_product = get_product(db, product_id=item.product_id)
+        if not db_product:
+            raise ValueError(f"Product with id {item.product_id} not found")
+
+        # Check for sufficient inventory
+        if db_product.inventory.quantity < item.quantity:
+            raise ValueError(f"Not enough stock for product {db_product.name}")
+
+        item_total = db_product.price * item.quantity
+        total_amount += item_total
+        order_items_data.append(
+            {
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+                "price_per_unit": db_product.price,
+            }
+        )
+
+    # 3. Create the SalesOrder and SalesOrderItems
+    db_order = models.SalesOrder(
+        customer_id=order.customer_id, total_amount=total_amount
+    )
+    db.add(db_order)
+    db.flush()  # Use flush to get the db_order.id before commit
+
+    for item_data in order_items_data:
+        db_item = models.SalesOrderItem(order_id=db_order.id, **item_data)
+        db.add(db_item)
+        # 4. Adjust inventory
+        adjust_inventory(db, product_id=item_data["product_id"], change=-item_data["quantity"])
+
+    db.commit()
+    db.refresh(db_order)
+    return db_order

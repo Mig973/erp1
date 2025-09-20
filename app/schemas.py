@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -83,6 +84,46 @@ class Customer(CustomerBase):
     class Config:
         orm_mode = True
 
+
+# --- Sales Order Schemas ---
+
+class SalesOrderItemBase(BaseModel):
+    product_id: int
+    quantity: int
+
+
+class SalesOrderItemCreate(SalesOrderItemBase):
+    pass
+
+
+class SalesOrderItem(SalesOrderItemBase):
+    id: int
+    price_per_unit: float
+
+    class Config:
+        orm_mode = True
+
+
+class SalesOrderBase(BaseModel):
+    customer_id: int
+
+
+class SalesOrderCreate(SalesOrderBase):
+    items: List[SalesOrderItemCreate]
+
+
+class SalesOrder(SalesOrderBase):
+    id: int
+    status: str
+    total_amount: float
+    created_at: datetime
+    items: List[SalesOrderItem] = []
+
+    class Config:
+        orm_mode = True
+
+
+# --- Auth Schemas ---
 
 class Token(BaseModel):
     access_token: str
