@@ -1,0 +1,16 @@
+# Database
+test.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+venv/
+env/
+
+# Testing
+.pytest_cache/
