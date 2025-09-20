@@ -165,3 +165,118 @@ def test_admin_assign_role_role_not_found(test_client, admin_user_token_headers)
     )
     assert response.status_code == 404
     assert response.json() == {"detail": "Role not found"}
+
+
+# --- Product Module Tests ---
+
+@pytest.fixture
+def sample_product(test_client, admin_user_token_headers):
+    product_data = {
+        "sku": "TEST-001",
+        "name": "Test Product",
+        "description": "This is a test product.",
+        "price": 99.99,
+    }
+    response = test_client.post(
+        "/products/",
+        json=product_data,
+        headers=admin_user_token_headers,
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_admin_can_create_product(sample_product):
+    assert sample_product["sku"] == "TEST-001"
+    assert sample_product["name"] == "Test Product"
+
+
+def test_regular_user_cannot_create_product(test_client, regular_user_token_headers):
+    product_data = {"sku": "FAIL-001", "name": "Fail Product", "price": 10.0}
+    response = test_client.post(
+        "/products/",
+        json=product_data,
+        headers=regular_user_token_headers,
+    )
+    assert response.status_code == 403
+
+
+def test_create_product_duplicate_sku(test_client, admin_user_token_headers, sample_product):
+    duplicate_product = {
+        "sku": "TEST-001",
+        "name": "Another Product",
+        "price": 50.0,
+    }
+    response = test_client.post(
+        "/products/",
+        json=duplicate_product,
+        headers=admin_user_token_headers,
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "SKU already registered"
+
+
+def test_authenticated_user_can_read_products(test_client, regular_user_token_headers, sample_product):
+    response = test_client.get("/products/", headers=regular_user_token_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) > 0
+    assert data[0]["sku"] == sample_product["sku"]
+
+    response = test_client.get(f"/products/{sample_product['id']}", headers=regular_user_token_headers)
+    assert response.status_code == 200
+    assert response.json()["name"] == sample_product["name"]
+
+
+def test_unauthenticated_user_cannot_read_products(test_client, sample_product):
+    response = test_client.get("/products/")
+    assert response.status_code == 401
+
+    response = test_client.get(f"/products/{sample_product['id']}")
+    assert response.status_code == 401
+
+
+def test_admin_can_update_product(test_client, admin_user_token_headers, sample_product):
+    update_data = {"name": "Updated Test Product", "price": 120.50}
+    response = test_client.put(
+        f"/products/{sample_product['id']}",
+        json=update_data,
+        headers=admin_user_token_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Test Product"
+    assert data["price"] == 120.50
+    assert data["sku"] == sample_product["sku"]
+
+
+def test_regular_user_cannot_update_product(test_client, regular_user_token_headers, sample_product):
+    update_data = {"name": "Should Fail Update"}
+    response = test_client.put(
+        f"/products/{sample_product['id']}",
+        json=update_data,
+        headers=regular_user_token_headers,
+    )
+    assert response.status_code == 403
+
+
+def test_admin_can_delete_product(test_client, admin_user_token_headers, sample_product):
+    # Delete the product
+    response = test_client.delete(
+        f"/products/{sample_product['id']}", headers=admin_user_token_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == sample_product["id"]
+
+    # Verify it's gone
+    verify_response = test_client.get(
+        f"/products/{sample_product['id']}", headers=admin_user_token_headers
+    )
+    assert verify_response.status_code == 404
+
+
+def test_regular_user_cannot_delete_product(test_client, regular_user_token_headers, sample_product):
+    response = test_client.delete(
+        f"/products/{sample_product['id']}", headers=regular_user_token_headers
+    )
+    assert response.status_code == 403

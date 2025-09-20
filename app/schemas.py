@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 
 class RoleBase(BaseModel):
@@ -11,6 +11,31 @@ class RoleCreate(RoleBase):
 
 
 class Role(RoleBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+
+class ProductBase(BaseModel):
+    sku: str
+    name: str
+    description: Optional[str] = None
+    price: float
+
+
+class ProductCreate(ProductBase):
+    pass
+
+
+class ProductUpdate(BaseModel):
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = None
+
+
+class Product(ProductBase):
     id: int
 
     class Config:

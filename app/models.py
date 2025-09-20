@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -29,3 +29,13 @@ class Role(Base):
     name = Column(String, unique=True, index=True)
 
     users = relationship("User", secondary=user_roles, back_populates="roles")
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sku = Column(String, unique=True, index=True)
+    name = Column(String, index=True)
+    description = Column(String)
+    price = Column(Float, nullable=False)

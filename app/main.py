@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -86,3 +87,73 @@ def assign_role_to_user(
         raise HTTPException(status_code=400, detail="User already has this role")
 
     return crud.assign_role_to_user(db=db, user=user, role=role)
+
+
+# --- Product Endpoints ---
+
+@app.post(
+    "/products/",
+    response_model=schemas.Product,
+    dependencies=[Depends(admin_role_checker)],
+)
+def create_product(product: schemas.ProductCreate, db: Session = Depends(get_db)):
+    db_product = crud.get_product_by_sku(db, sku=product.sku)
+    if db_product:
+        raise HTTPException(status_code=400, detail="SKU already registered")
+    return crud.create_product(db=db, product=product)
+
+
+@app.get(
+    "/products/",
+    response_model=List[schemas.Product],
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_products(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    products = crud.list_products(db, skip=skip, limit=limit)
+    return products
+
+
+@app.get(
+    "/products/{product_id}",
+    response_model=schemas.Product,
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_product(product_id: int, db: Session = Depends(get_db)):
+    db_product = crud.get_product(db, product_id=product_id)
+    if db_product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return db_product
+
+
+@app.put(
+    "/products/{product_id}",
+    response_model=schemas.Product,
+    dependencies=[Depends(admin_role_checker)],
+)
+def update_product(
+    product_id: int, product_in: schemas.ProductUpdate, db: Session = Depends(get_db)
+):
+    db_product = crud.get_product(db, product_id=product_id)
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    # Check for SKU uniqueness if it's being changed
+    if product_in.sku and product_in.sku != db_product.sku:
+        existing_product = crud.get_product_by_sku(db, sku=product_in.sku)
+        if existing_product:
+            raise HTTPException(status_code=400, detail="New SKU already registered")
+    updated_product = crud.update_product(
+        db=db, db_product=db_product, product_in=product_in
+    )
+    return updated_product
+
+
+@app.delete(
+    "/products/{product_id}",
+    response_model=schemas.Product,
+    dependencies=[Depends(admin_role_checker)],
+)
+def delete_product(product_id: int, db: Session = Depends(get_db)):
+    db_product = crud.delete_product(db, product_id=product_id)
+    if db_product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return db_product
