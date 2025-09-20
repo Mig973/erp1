@@ -54,9 +54,13 @@ def startup_event():
         sales_role = crud.get_role_by_name(db, name="sales")
         if not sales_role:
             crud.create_role(db, role=schemas.RoleCreate(name="sales"))
+        purchasing_role = crud.get_role_by_name(db, name="purchasing")
+        if not purchasing_role:
+            crud.create_role(db, role=schemas.RoleCreate(name="purchasing"))
 
 admin_role_checker = security.RoleChecker(["admin"])
 sales_role_checker = security.RoleChecker(["admin", "sales"])
+purchasing_role_checker = security.RoleChecker(["admin", "purchasing"])
 
 
 @app.get("/users/me", response_model=schemas.User)
@@ -306,3 +310,72 @@ def read_sales_order(order_id: int, db: Session = Depends(get_db)):
     if db_order is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return db_order
+
+
+# --- Supplier Endpoints ---
+
+@app.post(
+    "/suppliers/",
+    response_model=schemas.Supplier,
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def create_supplier(supplier: schemas.SupplierCreate, db: Session = Depends(get_db)):
+    db_supplier = crud.get_supplier_by_email(db, email=supplier.email)
+    if db_supplier:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return crud.create_supplier(db=db, supplier=supplier)
+
+
+@app.get(
+    "/suppliers/",
+    response_model=List[schemas.Supplier],
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_suppliers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    suppliers = crud.list_suppliers(db, skip=skip, limit=limit)
+    return suppliers
+
+
+@app.get(
+    "/suppliers/{supplier_id}",
+    response_model=schemas.Supplier,
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    db_supplier = crud.get_supplier(db, supplier_id=supplier_id)
+    if db_supplier is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    return db_supplier
+
+
+@app.put(
+    "/suppliers/{supplier_id}",
+    response_model=schemas.Supplier,
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def update_supplier(
+    supplier_id: int, supplier_in: schemas.SupplierUpdate, db: Session = Depends(get_db)
+):
+    db_supplier = crud.get_supplier(db, supplier_id=supplier_id)
+    if not db_supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    if supplier_in.email and supplier_in.email != db_supplier.email:
+        existing_supplier = crud.get_supplier_by_email(db, email=supplier_in.email)
+        if existing_supplier:
+            raise HTTPException(status_code=400, detail="New email already registered")
+    updated_supplier = crud.update_supplier(
+        db=db, db_supplier=db_supplier, supplier_in=supplier_in
+    )
+    return updated_supplier
+
+
+@app.delete(
+    "/suppliers/{supplier_id}",
+    response_model=schemas.Supplier,
+    dependencies=[Depends(purchasing_role_checker)],
+)
+def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    db_supplier = crud.delete_supplier(db, supplier_id=supplier_id)
+    if db_supplier is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    return db_supplier

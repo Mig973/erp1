@@ -35,6 +35,9 @@ def db_session():
     sales_role = crud.get_role_by_name(db, name="sales")
     if not sales_role:
         crud.create_role(db, role=schemas.RoleCreate(name="sales"))
+    purchasing_role = crud.get_role_by_name(db, name="purchasing")
+    if not purchasing_role:
+        crud.create_role(db, role=schemas.RoleCreate(name="purchasing"))
     try:
         yield db
     finally:
@@ -63,6 +66,26 @@ def regular_user_token_headers(test_client):
     )
     response = test_client.post(
         "/token", data={"username": "testuser@example.com", "password": "password"}
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def purchasing_user_token_headers(test_client, db_session):
+    # Manually ensure purchasing role exists
+    purchasing_role = crud.get_role_by_name(db=db_session, name="purchasing")
+    if not purchasing_role:
+        purchasing_role = crud.create_role(db=db_session, role=schemas.RoleCreate(name="purchasing"))
+
+    # Create purchasing user
+    user_schema = schemas.UserCreate(email="purchasing@example.com", password="purchasingpassword")
+    user = crud.create_user(db=db_session, user=user_schema)
+    crud.assign_role_to_user(db=db_session, user=user, role=purchasing_role)
+
+    # Get token
+    response = test_client.post(
+        "/token", data={"username": "purchasing@example.com", "password": "purchasingpassword"}
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -265,3 +288,60 @@ def test_regular_user_cannot_create_order(test_client, regular_user_token_header
     }
     response = test_client.post("/orders/", json=order_data, headers=regular_user_token_headers)
     assert response.status_code == 403
+
+
+# --- Supplier Module Tests ---
+
+@pytest.fixture
+def sample_supplier(test_client, purchasing_user_token_headers):
+    supplier_data = {
+        "name": "Test Supplier Co.",
+        "email": "sales@testsupplier.com",
+        "phone": "111-222-3333",
+    }
+    response = test_client.post(
+        "/suppliers/", json=supplier_data, headers=purchasing_user_token_headers
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_purchasing_user_can_create_supplier(sample_supplier):
+    assert sample_supplier["name"] == "Test Supplier Co."
+
+
+def test_admin_user_can_create_supplier(test_client, admin_user_token_headers):
+    supplier_data = {"name": "Admin Supplier", "email": "contact@adminsupplier.com"}
+    response = test_client.post(
+        "/suppliers/", json=supplier_data, headers=admin_user_token_headers
+    )
+    assert response.status_code == 200
+
+
+def test_regular_user_cannot_create_supplier(test_client, regular_user_token_headers):
+    supplier_data = {"name": "Fail Supplier", "email": "contact@failsupplier.com"}
+    response = test_client.post(
+        "/suppliers/", json=supplier_data, headers=regular_user_token_headers
+    )
+    assert response.status_code == 403
+
+
+def test_authenticated_user_can_read_suppliers(test_client, regular_user_token_headers, sample_supplier):
+    response = test_client.get("/suppliers/", headers=regular_user_token_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) > 0
+    assert data[0]["email"] == sample_supplier["email"]
+
+
+def test_purchasing_user_can_delete_supplier(test_client, purchasing_user_token_headers, sample_supplier):
+    response = test_client.delete(
+        f"/suppliers/{sample_supplier['id']}", headers=purchasing_user_token_headers
+    )
+    assert response.status_code == 200
+
+    # Verify it's gone
+    verify_response = test_client.get(
+        f"/suppliers/{sample_supplier['id']}", headers=purchasing_user_token_headers
+    )
+    assert verify_response.status_code == 404

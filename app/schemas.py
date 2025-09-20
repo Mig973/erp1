@@ -18,6 +18,31 @@ class Role(RoleBase):
         orm_mode = True
 
 
+class SupplierBase(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class SupplierCreate(SupplierBase):
+    pass
+
+
+class SupplierUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class Supplier(SupplierBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+
 class InventoryBase(BaseModel):
     quantity: int
 

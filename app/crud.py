@@ -211,3 +211,47 @@ def create_sales_order(db: Session, order: schemas.SalesOrderCreate):
     db.commit()
     db.refresh(db_order)
     return db_order
+
+
+# --- Supplier CRUD ---
+
+def get_supplier(db: Session, supplier_id: int):
+    return db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
+
+
+def get_supplier_by_email(db: Session, email: str):
+    return db.query(models.Supplier).filter(models.Supplier.email == email).first()
+
+
+def list_suppliers(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Supplier).offset(skip).limit(limit).all()
+
+
+def create_supplier(db: Session, supplier: schemas.SupplierCreate):
+    db_supplier = models.Supplier(**supplier.dict())
+    db.add(db_supplier)
+    db.commit()
+    db.refresh(db_supplier)
+    return db_supplier
+
+
+def update_supplier(
+    db: Session, db_supplier: models.Supplier, supplier_in: schemas.SupplierUpdate
+):
+    supplier_data = supplier_in.dict(exclude_unset=True)
+    for key, value in supplier_data.items():
+        setattr(db_supplier, key, value)
+    db.add(db_supplier)
+    db.commit()
+    db.refresh(db_supplier)
+    return db_supplier
+
+
+def delete_supplier(db: Session, supplier_id: int):
+    db_supplier = (
+        db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
+    )
+    if db_supplier:
+        db.delete(db_supplier)
+        db.commit()
+    return db_supplier
