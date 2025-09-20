@@ -51,8 +51,12 @@ def startup_event():
         user_role = crud.get_role_by_name(db, name="user")
         if not user_role:
             crud.create_role(db, role=schemas.RoleCreate(name="user"))
+        sales_role = crud.get_role_by_name(db, name="sales")
+        if not sales_role:
+            crud.create_role(db, role=schemas.RoleCreate(name="sales"))
 
 admin_role_checker = security.RoleChecker(["admin"])
+sales_role_checker = security.RoleChecker(["admin", "sales"])
 
 
 @app.get("/users/me", response_model=schemas.User)
@@ -192,3 +196,72 @@ def adjust_product_inventory(
         # This case should ideally not be hit if a product exists
         raise HTTPException(status_code=404, detail="Inventory for product not found")
     return updated_inventory
+
+
+# --- Customer Endpoints ---
+
+@app.post(
+    "/customers/",
+    response_model=schemas.Customer,
+    dependencies=[Depends(sales_role_checker)],
+)
+def create_customer(customer: schemas.CustomerCreate, db: Session = Depends(get_db)):
+    db_customer = crud.get_customer_by_email(db, email=customer.email)
+    if db_customer:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return crud.create_customer(db=db, customer=customer)
+
+
+@app.get(
+    "/customers/",
+    response_model=List[schemas.Customer],
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_customers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    customers = crud.list_customers(db, skip=skip, limit=limit)
+    return customers
+
+
+@app.get(
+    "/customers/{customer_id}",
+    response_model=schemas.Customer,
+    dependencies=[Depends(security.get_current_active_user)],
+)
+def read_customer(customer_id: int, db: Session = Depends(get_db)):
+    db_customer = crud.get_customer(db, customer_id=customer_id)
+    if db_customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return db_customer
+
+
+@app.put(
+    "/customers/{customer_id}",
+    response_model=schemas.Customer,
+    dependencies=[Depends(sales_role_checker)],
+)
+def update_customer(
+    customer_id: int, customer_in: schemas.CustomerUpdate, db: Session = Depends(get_db)
+):
+    db_customer = crud.get_customer(db, customer_id=customer_id)
+    if not db_customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    if customer_in.email and customer_in.email != db_customer.email:
+        existing_customer = crud.get_customer_by_email(db, email=customer_in.email)
+        if existing_customer:
+            raise HTTPException(status_code=400, detail="New email already registered")
+    updated_customer = crud.update_customer(
+        db=db, db_customer=db_customer, customer_in=customer_in
+    )
+    return updated_customer
+
+
+@app.delete(
+    "/customers/{customer_id}",
+    response_model=schemas.Customer,
+    dependencies=[Depends(sales_role_checker)],
+)
+def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+    db_customer = crud.delete_customer(db, customer_id=customer_id)
+    if db_customer is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return db_customer

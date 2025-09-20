@@ -17,6 +17,22 @@ class Role(RoleBase):
         orm_mode = True
 
 
+class InventoryBase(BaseModel):
+    quantity: int
+
+
+class InventoryUpdate(BaseModel):
+    change: int
+
+
+class Inventory(InventoryBase):
+    id: int
+    product_id: int
+
+    class Config:
+        orm_mode = True
+
+
 class ProductBase(BaseModel):
     sku: str
     name: str
@@ -35,25 +51,34 @@ class ProductUpdate(BaseModel):
     price: Optional[float] = None
 
 
-class InventoryBase(BaseModel):
-    quantity: int
-
-
-class InventoryUpdate(BaseModel):
-    change: int
-
-
-class Inventory(InventoryBase):
+class Product(ProductBase):
     id: int
-    product_id: int
+    inventory: Optional[Inventory] = None
 
     class Config:
         orm_mode = True
 
 
-class Product(ProductBase):
+class CustomerBase(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class CustomerCreate(CustomerBase):
+    pass
+
+
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class Customer(CustomerBase):
     id: int
-    inventory: Optional[Inventory] = None
 
     class Config:
         orm_mode = True

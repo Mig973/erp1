@@ -53,3 +53,13 @@ class Inventory(Base):
     product_id = Column(Integer, ForeignKey("products.id"), unique=True, nullable=False)
 
     product = relationship("Product", back_populates="inventory")
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)
